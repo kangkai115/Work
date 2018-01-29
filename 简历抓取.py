@@ -2,8 +2,11 @@
 import re
 import quopri
 import os,sys
+from urllib import request
 import urllib.request
 import xlwt
+import json
+import requests
 
 #智联
 def take(x,num):
@@ -17,7 +20,11 @@ def take(x,num):
 	name=re.findall(r'line-height:50px">(.*?)</td></tr><tr width=3D',dir)#姓名
 	data1.append(name[0])
 	sex=re.findall('<font style=3D"font-weight:bold">(.*?)</font><small style=3D"colo',dir)	#性别查找，存入data1列表
-	data1.append(sex[0])
+	print(sex)
+	if sex[0] == '=C4=D0' or sex[0] == '=C5=AE':
+		data1.append(sex[0])
+	else :
+		data1.append(' ')
 	born=re.findall('</small><font style=3D"font-weight:bold">(.*?)</font>',dir)#出生
 	if  born[0][-6:]=="=D4=C2":
 		data1.append(born[0])
@@ -39,41 +46,75 @@ def take(x,num):
 		b=quopri.decodestring(word) 	#转换 Python2此步可直接转换  pytyon3下需要下一步
 		c=str(b,encoding='gb2312')
 		data2.append(c)
-	word1 = 'ldparam3D'				#截取以此行开头字符
-	word2 = '">'					#截取以此行结尾字符
+	word_begin1 = 'ldparam3D'				#截取以此行开头字符
+	word_begin2 = 'param3D'
+	word_end = '">'					#截取以此行结尾字符
 	f = open(x)		#打开文件
 	buff = f.read()	#整页读取，因为跨行要web地址，不能readline
 	buff = buff.replace('\n','')#取消换行
 	buff = buff.replace('=','')#取消等号
-	pat = re.compile(word1+'(.*?)'+word2,re.S)#截取符合条件的字符
-	result = pat.findall(buff)
-	str_result=''.join(result)	#从列表中转成字符
-	str_all='http://rd.zhaopin.com/resumepreview/resume/emailim?ldparam='+str_result+'&sid=121125266&site='
-	f=open('d:\\10.txt','w')	#创建文件以存储网页内容
-	page = urllib.request.urlopen(str_all)
-	data = page.read()	#读取网页
-	page1= data.decode('utf-8')	#转码
-	try:
-		f.write(page1)	#存储网页内容
-		f.close()	#必须关闭 否则无法读取
-		for line in open('d:\\10.txt') :#读取临时网页内容
-			if re.match('                <p>电话',line):
-				tel=line[59:70]
-				data2.append(tel)
-			if re.match('                <p>邮箱',line):
-				emailadd=''
-				email=line[59:90]
-				for word in email:
-					if word!='<':
-						emailadd=emailadd+word
-					else:
-						break
-				data2.append(emailadd)
-		return(data2)
-	except UnicodeEncodeError:
-		a=['','','','','']
-		a.append(x)
-		return(a)
+	# print(buff)
+	pat1 = re.compile(word_begin1+'(.*?)'+word_end,re.S)#截取符合条件的字符 老版匹配
+	pat2 = re.compile(word_begin2+'(.*?)'+word_end,re.S)
+
+	#对老版电话、邮箱提取
+	if pat1.findall(buff):
+		result = pat1.findall(buff)
+		str_result=''.join(result)	#从列表中转成字符
+		str_all='http://rd.zhaopin.com/resumepreview/resume/emailim?ldparam='+str_result+'&sid=121125266&site='
+		f = open('d:\\10.txt', 'w')  # 创建文件以存储网页内容
+		page = urllib.request.urlopen(str_all)
+		data = page.read()  # 读取网页
+		page1 = data.decode('utf-8')  # 转码
+		try:
+			f.write(page1)  # 存储网页内容
+			f.close()  # 必须关闭 否则无法读取
+			for line in open('d:\\10.txt'):  # 读取临时网页内容
+				if re.match('                <p>电话', line):
+					tel = line[59:70]
+					data2.append(tel)
+				if re.match('                <p>邮箱', line):
+					emailadd = ''
+					email = line[59:90]
+					for word in email:
+						if word != '<':
+							emailadd = emailadd + word
+						else:
+							break
+					data2.append(emailadd)
+			return (data2)
+		except UnicodeEncodeError:
+			x = ['', '']
+			data2.append(x)
+			return (data2)
+    #对新版电话、邮箱提取
+	else :
+		result = pat2.findall(buff)
+		str_result = ''.join(result)  # 从列表中转成字符
+		str_all = 'https://ihr.zhaopin.com/resumemanage/emailim.do?s=' + str_result
+		f = open('d:\\办公室简历\\10.txt', 'w')  # 创建文件以存储网页内容
+		headers = {'User-Agent': 'User-Agent:Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36'}
+		req = request.Request(str_all, headers=headers)
+		page = request.urlopen(req)
+		data = page.read()  # 读取网页
+		page1 = data.decode('utf-8')  # 转码
+		# print(page1)
+		try:
+			f.write(page1)  # 存储网页内容
+			f.close()  # 必须关闭 否则无法读取
+			for line in open('d:\\办公室简历\\10.txt'):  # 读取临时网页内容
+					tel = re.compile('phone' + '(.*?)' +'email', re.S).findall(line)   #根据josn提取出来的找符合项
+					tel = ''.join(tel)[3:-3]
+					emailadd = re.compile('email' + '(.*?)' +'gid', re.S).findall(line)
+					emailadd = ''.join(emailadd)[3:-3]
+					data2.append(tel)
+					data2.append(emailadd)
+					# print(data2)
+			return (data2)
+		except UnicodeEncodeError:
+			x = ['', '']
+			data2.append(x)
+			return(data2)
 
 
 def main():
